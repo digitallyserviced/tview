@@ -297,7 +297,7 @@ func (a *Application) Run() error {
 		defer wg.Done()
 
 		// check to see if the Application.Run is still valid
-		for a.runContext.Err() == nil {
+		for {
 			a.RLock()
 			screen := a.screen
 			a.RUnlock()
@@ -349,7 +349,7 @@ func (a *Application) Run() error {
 	// Start event loop.
 EventLoop:
 	// check to see if the Application.Run is still valid
-	for a.runContext.Err() == nil {
+	for {
 		select {
 		// break loop when runContext complete
 		case <-a.runContext.Done():
@@ -771,9 +771,9 @@ func (a *Application) ResizeToFullScreen(p Primitive) *Application {
 	return a
 }
 
-// SetFocus sets the focus on a new primitive. All key events will be redirected
-// to that primitive. Callers must ensure that the primitive will handle key
-// events.
+// SetFocus sets the focus to a new primitive. All key events will be directed
+// down the hierarchy (starting at the root) until a primitive handles them,
+// which per default goes towards the focused primitive.
 //
 // Blur() will be called on the previously focused primitive. Focus() will be
 // called on the new primitive.
@@ -818,8 +818,7 @@ func (a *Application) GetFocus() Primitive {
 func (a *Application) QueueUpdate(f func()) *Application {
 	defer func() {
 		if err := recover(); err != nil {
-			d := 2
-			d++
+			// dealing with panic, as we can still get a closed channel
 		}
 	}()
 	// check to see if the Application.Run is still valid
