@@ -105,6 +105,8 @@ For a presentation highlighting this package, compile and run the program found 
 - [goaround: Query stackoverflow API and get results on terminal](https://github.com/glendsoza/goaround)
 - [resto: 🔗 a CLI app can send pretty HTTP & API requests with TUI](https://github.com/abdfnx/resto)
 - [twad: a WAD launcher for the terminal](https://github.com/zmnpl/twad)
+- [pacseek: A TUI for searching and installing Arch Linux packages](https://github.com/moson-mo/pacseek)
+- [7GUIs demo](https://github.com/letientai299/7guis/tree/master/tui)
 
 ## Documentation
 
@@ -113,6 +115,10 @@ Refer to https://pkg.go.dev/github.com/rivo/tview for the package's documentatio
 ## Dependencies
 
 This package is based on [github.com/gdamore/tcell](https://github.com/gdamore/tcell) (and its dependencies) as well as on [github.com/rivo/uniseg](https://github.com/rivo/uniseg).
+
+## Sponsor this Project
+
+[Become a Sponsor on GitHub](https://github.com/sponsors/rivo?metadata_source=tview_readme) to further this project!
 
 ## Versioning and Backwards-Compatibility
 
