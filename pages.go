@@ -8,6 +8,7 @@ import (
 type page struct {
 	Name    string    // The page's name.
 	Item    Primitive // The page's primitive.
+      Page Paged
 	Resize  bool      // Whether or not to resize the page when it is drawn.
 	Visible bool      // Whether or not this page is visible.
 }
@@ -69,7 +70,11 @@ func (p *Pages) AddPage(name string, item Primitive, resize, visible bool) *Page
 			break
 		}
 	}
-	p.pages = append(p.pages, &page{Item: item, Name: name, Resize: resize, Visible: visible})
+  pg := &page{Item: item, Name: name, Resize: resize, Visible: visible}
+  if pag, ok := item.(Paged); ok {
+    pg.Page = pag
+  }
+	p.pages = append(p.pages, pg)
 	if p.changed != nil {
 		p.changed()
 	}
@@ -119,6 +124,16 @@ func (p *Pages) RemovePage(name string) *Pages {
 	return p
 }
 
+// GetPage returns page if a page with the given name exists in this object.
+func (p *Pages) GetPage(name string) Primitive {
+	for _, page := range p.pages {
+		if page.Name == name {
+      return page.Item
+		}
+	}
+	return nil
+}
+
 // HasPage returns true if a page with the given name exists in this object.
 func (p *Pages) HasPage(name string) bool {
 	for _, page := range p.pages {
@@ -135,6 +150,9 @@ func (p *Pages) ShowPage(name string) *Pages {
 	for _, page := range p.pages {
 		if page.Name == name {
 			page.Visible = true
+      if page.Page != nil {
+        page.Page.Hidden(p)
+      }
 			if p.changed != nil {
 				p.changed()
 			}
@@ -152,6 +170,9 @@ func (p *Pages) HidePage(name string) *Pages {
 	for _, page := range p.pages {
 		if page.Name == name {
 			page.Visible = false
+      if page.Page != nil {
+        page.Page.Hidden(p)
+      }
 			if p.changed != nil {
 				p.changed()
 			}
@@ -170,6 +191,9 @@ func (p *Pages) SwitchToPage(name string) *Pages {
 	for _, page := range p.pages {
 		if page.Name == name {
 			page.Visible = true
+      if page.Page != nil {
+        page.Page.Shown(p)
+      }
 		} else {
 			page.Visible = false
 		}
@@ -192,6 +216,9 @@ func (p *Pages) SendToFront(name string) *Pages {
 			if index < len(p.pages)-1 {
 				p.pages = append(append(p.pages[:index], p.pages[index+1:]...), page)
 			}
+      if page.Page != nil {
+        page.Page.Moved(p, Front)
+      }
 			if page.Visible && p.changed != nil {
 				p.changed()
 			}
@@ -213,6 +240,9 @@ func (p *Pages) SendToBack(name string) *Pages {
 			if index > 0 {
 				p.pages = append(append([]*page{pg}, p.pages[:index]...), p.pages[index+1:]...)
 			}
+      if pg.Page != nil {
+        pg.Page.Moved(p, Back)
+      }
 			if pg.Visible && p.changed != nil {
 				p.changed()
 			}

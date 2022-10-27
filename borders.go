@@ -10,6 +10,11 @@ var Borders = struct {
 	BottomLeft  rune
 	BottomRight rune
 
+	TopHorizontal  rune
+	BottomHorizontal  rune
+	LeftVertical    rune
+	RightVertical    rune
+
 	LeftT   rune
 	RightT  rune
 	TopT    rune

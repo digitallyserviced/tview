@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/gdamore/tcell/v2"
+	runewidth "github.com/mattn/go-runewidth"
 	"github.com/rivo/uniseg"
 )
 
@@ -25,6 +26,19 @@ var (
 	nonEscapePattern = regexp.MustCompile(`(\[[a-zA-Z0-9_,;: \-\."#]+\[*)\]`)
 	boundaryPattern  = regexp.MustCompile(`(([,\.\-:;!\?&#+]|\n)[ \t\f\r]*|([ \t\f\r]+))`)
 	spacePattern     = regexp.MustCompile(`\s+`)
+)
+
+// Transformation describes a widget state modification.
+type Transformation int
+
+// Widget transformations.
+const (
+	TransformFirstItem    Transformation = 1
+	TransformLastItem     Transformation = 2
+	TransformPreviousItem Transformation = 3
+	TransformNextItem     Transformation = 4
+	TransformPreviousPage Transformation = 5
+	TransformNextPage     Transformation = 6
 )
 
 // Positions of substrings in regular expressions.
@@ -165,7 +179,7 @@ func overlayStyle(style tcell.Style, fgColor, bgColor, attributes string) tcell.
 func decomposeString(text string, findColors, findRegions bool) (colorIndices [][]int, colors [][]string, regionIndices [][]int, regions [][]string, escapeIndices [][]int, stripped string, width int) {
 	// Shortcut for the trivial case.
 	if !findColors && !findRegions {
-		return nil, nil, nil, nil, nil, text, uniseg.StringWidth(text)
+		return nil, nil, nil, nil, nil, text, stringWidth(text)
 	}
 
 	// Get positions of any tags.
@@ -215,7 +229,7 @@ func decomposeString(text string, findColors, findRegions bool) (colorIndices []
 	stripped = string(buf)
 
 	// Get the width of the stripped string.
-	width = uniseg.StringWidth(stripped)
+	width = stringWidth(stripped)
 
 	return
 }
@@ -261,7 +275,7 @@ func printWithStyle(screen tcell.Screen, text string, x, y, skipWidth, maxWidth,
 			foregroundColor, backgroundColor, attributes           string
 		)
 		originalStyle := style
-		iterateString(strippedText, func(main rune, comb []rune, textPos, textWidth, screenPos, screenWidth, boundaries int) bool {
+		iterateString(strippedText, func(main rune, comb []rune, textPos, textWidth, screenPos, screenWidth int) bool {
 			// Update color/escape tag offset and style.
 			if colorPos < len(colorIndices) && textPos+tagOffset >= colorIndices[colorPos][0] && textPos+tagOffset < colorIndices[colorPos][1] {
 				foregroundColor, backgroundColor, attributes = styleFromTag(foregroundColor, backgroundColor, attributes, colors[colorPos])
@@ -304,7 +318,7 @@ func printWithStyle(screen tcell.Screen, text string, x, y, skipWidth, maxWidth,
 			for rightIndex-1 > leftIndex && strippedWidth-skipWidth-choppedLeft-choppedRight > maxWidth {
 				if skipWidth > 0 || choppedLeft < choppedRight {
 					// Iterate on the left by one character.
-					iterateString(strippedText[leftIndex:], func(main rune, comb []rune, textPos, textWidth, screenPos, screenWidth, boundaries int) bool {
+					iterateString(strippedText[leftIndex:], func(main rune, comb []rune, textPos, textWidth, screenPos, screenWidth int) bool {
 						if skipWidth > 0 {
 							skipWidth -= screenWidth
 							strippedWidth -= screenWidth
@@ -368,7 +382,7 @@ func printWithStyle(screen tcell.Screen, text string, x, y, skipWidth, maxWidth,
 		drawn, drawnWidth, colorPos, escapePos, tagOffset, from, to int
 		foregroundColor, backgroundColor, attributes                string
 	)
-	iterateString(strippedText, func(main rune, comb []rune, textPos, length, screenPos, screenWidth, boundaries int) bool {
+	iterateString(strippedText, func(main rune, comb []rune, textPos, length, screenPos, screenWidth int) bool {
 		// Skip character if necessary.
 		if skipWidth > 0 {
 			skipWidth -= screenWidth
@@ -440,6 +454,24 @@ func TaggedStringWidth(text string) int {
 	return width
 }
 
+// stringWidth returns the number of horizontal cells needed to print the given
+// text. It splits the text into its grapheme clusters, calculates each
+// cluster's width, and adds them up to a total.
+func stringWidth(text string) (width int) {
+	g := uniseg.NewGraphemes(text)
+	for g.Next() {
+		var chWidth int
+		for _, r := range g.Runes() {
+			chWidth = runewidth.RuneWidth(r)
+			if chWidth > 0 {
+				break // Our best guess at this point is to use the width of the first non-zero-width rune.
+			}
+		}
+		width += chWidth
+	}
+	return
+}
+
 // WordWrap splits a text such that each resulting line does not exceed the
 // given screen width. Possible split points are after any punctuation or
 // whitespace. Whitespace after split points will be dropped.
@@ -473,7 +505,7 @@ func WordWrap(text string, width int) (lines []string) {
 		}
 		return substr
 	}
-	iterateString(strippedText, func(main rune, comb []rune, textPos, textWidth, screenPos, screenWidth, boundaries int) bool {
+	iterateString(strippedText, func(main rune, comb []rune, textPos, textWidth, screenPos, screenWidth int) bool {
 		// Handle tags.
 		for {
 			if colorPos < len(colorTagIndices) && textPos+tagOffset >= colorTagIndices[colorPos][0] && textPos+tagOffset < colorTagIndices[colorPos][1] {
@@ -548,23 +580,13 @@ func WordWrap(text string, width int) (lines []string) {
 // recognized and substituted by the print functions of this package. For
 // example, to include a tag-like string in a box title or in a TextView:
 //
-//	box.SetTitle(tview.Escape("[squarebrackets]"))
-//	fmt.Fprint(textView, tview.Escape(`["quoted"]`))
+//   box.SetTitle(tview.Escape("[squarebrackets]"))
+//   fmt.Fprint(textView, tview.Escape(`["quoted"]`))
 func Escape(text string) string {
 	return nonEscapePattern.ReplaceAllString(text, "$1[]")
 }
 
-// iterateString iterates through the given string one printed character at a
-// time. For each such character, the callback function is called with the
-// Unicode code points of the character (the first rune and any combining runes
-// which may be nil if there aren't any), the starting position (in bytes)
-// within the original string, its length in bytes, the screen position of the
-// character, the screen width of it, and a boundaries value which includes
-// word/sentence boundary or line break information (see the
-// github.com/rivo/uniseg package, Step() function, for more information). The
-// iteration stops if the callback returns true. This function returns true if
-// the iteration was stopped before the last character.
-func iterateString(text string, callback func(main rune, comb []rune, textPos, textWidth, screenPos, screenWidth, boundaries int) bool) bool {
+func biterateString(text string, callback func(main rune, comb []rune, textPos, textWidth, screenPos, screenWidth, boundaries int) bool) bool {
 	var screenPos, textPos, boundaries int
 
 	state := -1
@@ -589,6 +611,36 @@ func iterateString(text string, callback func(main rune, comb []rune, textPos, t
 
 	return false
 }
+// iterateString iterates through the given string one printed character at a
+// time. For each such character, the callback function is called with the
+// Unicode code points of the character (the first rune and any combining runes
+// which may be nil if there aren't any), the starting position (in bytes)
+// within the original string, its length in bytes, the screen position of the
+// character, and the screen width of it. The iteration stops if the callback
+// returns true. This function returns true if the iteration was stopped before
+// the last character.
+func iterateString(text string, callback func(main rune, comb []rune, textPos, textWidth, screenPos, screenWidth int) bool) bool {
+	var screenPos int
+
+	gr := uniseg.NewGraphemes(text)
+	for gr.Next() {
+		r := gr.Runes()
+		from, to := gr.Positions()
+		width := stringWidth(gr.Str())
+		var comb []rune
+		if len(r) > 1 {
+			comb = r[1:]
+		}
+
+		if callback(r[0], comb, from, to-from, screenPos, width) {
+			return true
+		}
+
+		screenPos += width
+	}
+
+	return false
+}
 
 // iterateStringReverse iterates through the given string in reverse, starting
 // from the end of the string, one printed character at a time. For each such
@@ -607,7 +659,7 @@ func iterateStringReverse(text string, callback func(main rune, comb []rune, tex
 
 	// Create the grapheme clusters.
 	var clusters []cluster
-	iterateString(text, func(main rune, comb []rune, textPos int, textWidth int, screenPos int, screenWidth, boundaries int) bool {
+	iterateString(text, func(main rune, comb []rune, textPos int, textWidth int, screenPos int, screenWidth int) bool {
 		clusters = append(clusters, cluster{
 			main:        main,
 			comb:        comb,

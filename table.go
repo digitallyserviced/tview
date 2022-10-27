@@ -135,7 +135,7 @@ func (c *TableCell) SetTransparency(transparent bool) *TableCell {
 // SetAttributes sets the cell's text attributes. You can combine different
 // attributes using bitmask operations:
 //
-//	cell.SetAttributes(tcell.AttrUnderline | tcell.AttrBold)
+//   cell.SetAttributes(tcell.AttrUnderline | tcell.AttrBold)
 func (c *TableCell) SetAttributes(attr tcell.AttrMask) *TableCell {
 	c.Attributes = attr
 	return c
@@ -388,13 +388,13 @@ func (t *tableDefaultContent) GetColumnCount() int {
 // Columns will use as much horizontal space as they need. You can constrain
 // their size with the MaxWidth parameter of the TableCell type.
 //
-// # Fixed Columns
+// Fixed Columns
 //
 // You can define fixed rows and rolumns via SetFixed(). They will always stay
 // in their place, even when the table is scrolled. Fixed rows are always the
 // top rows. Fixed columns are always the leftmost columns.
 //
-// # Selections
+// Selections
 //
 // You can call SetSelectable() to set columns and/or rows to "selectable". If
 // the flag is set only for columns, entire columns can be selected by the user.
@@ -402,7 +402,7 @@ func (t *tableDefaultContent) GetColumnCount() int {
 // set, individual cells can be selected. The "selected" handler set via
 // SetSelectedFunc() is invoked when the user presses Enter on a selection.
 //
-// # Navigation
+// Navigation
 //
 // If the table extends beyond the available space, it can be navigated with
 // key bindings similar to Vim:
@@ -551,7 +551,7 @@ func (t *Table) SetBordersColor(color tcell.Color) *Table {
 //
 // To reset a previous setting to its default, make the following call:
 //
-//	table.SetSelectedStyle(tcell.Style{})
+//   table.SetSelectedStyle(tcell.Style{})
 func (t *Table) SetSelectedStyle(style tcell.Style) *Table {
 	t.selectedStyle = style
 	return t
@@ -1109,6 +1109,7 @@ func (t *Table) Draw(screen tcell.Screen) {
 	if t.borders {
 		columnX++
 	}
+  overflown := false
 	for columnIndex, column := range columns {
 		columnWidth := widths[columnIndex]
 		for rowY, row := range rows {
@@ -1131,6 +1132,7 @@ func (t *Table) Draw(screen tcell.Screen) {
 				drawBorder(columnX-1, rowY, ch)
 				rowY++
 				if rowY >= height || y+rowY >= totalHeight {
+          overflown = true
 					break // No space for the text anymore.
 				}
 				drawBorder(columnX-1, rowY, Borders.Vertical)
@@ -1178,7 +1180,9 @@ func (t *Table) Draw(screen tcell.Screen) {
 
 		columnX += columnWidth + 1
 	}
-
+if overflown {
+    defer t.DrawOverflow(screen, t.rowOffset != 0, !t.trackEnd)
+  }
 	// Draw right border.
 	columnX--
 	if t.borders && len(rows) > 0 && len(columns) > 0 && columnX < width {
@@ -1233,6 +1237,9 @@ func (t *Table) Draw(screen tcell.Screen) {
 						a = attr
 					}
 					style = style.Background(bg).Foreground(fg).Attributes(a)
+          if textColor == 0 {
+            style = style.Background(bg)
+          }
 				}
 				screen.SetContent(fromX+bx, fromY+by, m, c, style)
 			}
@@ -1296,9 +1303,15 @@ func (t *Table) Draw(screen tcell.Screen) {
 		for _, info := range entries {
 			if info.selected {
 				if t.selectedStyle != (tcell.Style{}) {
+          if selFg == 0 {
+					defer colorBackground(info.x, info.y, info.w, info.h, selBg, selFg, false, true, 0, false)
+
+          } else {
+
 					defer colorBackground(info.x, info.y, info.w, info.h, selBg, selFg, false, false, selAttr, false)
+          }
 				} else {
-					defer colorBackground(info.x, info.y, info.w, info.h, bgColor, info.cell.Color, false, false, 0, true)
+					defer colorBackground(info.x, info.y, info.w, info.h, bgColor, info.cell.Color, true, true, 0, true)
 				}
 			} else {
 				colorBackground(info.x, info.y, info.w, info.h, bgColor, info.cell.Color, info.cell.Transparent, true, 0, false)
@@ -1322,7 +1335,7 @@ func (t *Table) InputHandler() func(event *tcell.EventKey, setFocus func(p Primi
 			if t.done != nil {
 				t.done(key)
 			}
-			return
+			return 
 		}
 
 		// Movement functions.
@@ -1596,9 +1609,6 @@ func (t *Table) MouseHandler() func(action MouseAction, event *tcell.EventMouse,
 		}
 
 		switch action {
-		case MouseLeftDown:
-			setFocus(t)
-			consumed = true
 		case MouseLeftClick:
 			selectEvent := true
 			row, column := t.cellAt(x, y)
@@ -1611,6 +1621,7 @@ func (t *Table) MouseHandler() func(action MouseAction, event *tcell.EventMouse,
 			if selectEvent && (t.rowsSelectable || t.columnsSelectable) {
 				t.Select(row, column)
 			}
+			setFocus(t)
 			consumed = true
 		case MouseScrollUp:
 			t.trackEnd = false

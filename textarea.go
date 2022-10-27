@@ -1053,7 +1053,7 @@ func (t *TextArea) Draw(screen tcell.Screen) {
 func (t *TextArea) drawPlaceholder(screen tcell.Screen, x, y, width, height int) {
 	posX, posY := x, y
 	lastLineBreak, lastGraphemeBreak := x, x // Screen positions of the last possible line/grapheme break.
-	iterateString(t.placeholder, func(main rune, comb []rune, textPos, textWidth, screenPos, screenWidth, boundaries int) bool {
+	biterateString(t.placeholder, func(main rune, comb []rune, textPos, textWidth, screenPos, screenWidth, boundaries int) bool {
 		if posX+screenWidth > x+width {
 			// This character doesn't fit. Break over to the next line.
 			// Perform word wrapping first by copying the last word over to

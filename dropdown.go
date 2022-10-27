@@ -4,7 +4,6 @@ import (
 	"strings"
 
 	"github.com/gdamore/tcell/v2"
-	"github.com/rivo/uniseg"
 )
 
 // dropDownOption is one option that can be selected in a drop-down primitive.
@@ -374,7 +373,7 @@ func (d *DropDown) Draw(screen tcell.Screen) {
 	if d.open && len(d.prefix) > 0 {
 		// Show the prefix.
 		currentOptionPrefixWidth := TaggedStringWidth(d.currentOptionPrefix)
-		prefixWidth := uniseg.StringWidth(d.prefix)
+		prefixWidth := stringWidth(d.prefix)
 		listItemText := d.options[d.list.GetCurrentItem()].Text
 		Print(screen, d.currentOptionPrefix, x, y, fieldWidth, AlignLeft, d.fieldTextColor)
 		Print(screen, d.prefix, x+currentOptionPrefixWidth, y, fieldWidth-currentOptionPrefixWidth, AlignLeft, d.prefixTextColor)
@@ -547,11 +546,7 @@ func (d *DropDown) MouseHandler() func(action MouseAction, event *tcell.EventMou
 			return d.InRect(x, y), nil // No, and it's not expanded either. Ignore.
 		}
 
-		// As long as the drop-down is open, we capture all mouse events.
-		if d.open {
-			capture = d
-		}
-
+		// Handle dragging. Clicks are implicitly handled by this logic.
 		switch action {
 		case MouseLeftDown:
 			consumed = d.open || inRect
@@ -568,6 +563,7 @@ func (d *DropDown) MouseHandler() func(action MouseAction, event *tcell.EventMou
 				// dragging. Because we don't act upon it, it's not a problem.
 				d.list.MouseHandler()(MouseLeftClick, event, setFocus)
 				consumed = true
+				capture = d
 			}
 		case MouseLeftUp:
 			if d.dragging {
