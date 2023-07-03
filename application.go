@@ -61,9 +61,9 @@ type queuedUpdate struct {
 // The following command displays a primitive p on the screen until Ctrl-C is
 // pressed:
 //
-//   if err := tview.NewApplication().SetRoot(p, true).Run(); err != nil {
-//       panic(err)
-//   }
+//	if err := tview.NewApplication().SetRoot(p, true).Run(); err != nil {
+//	    panic(err)
+//	}
 type Application struct {
 	sync.RWMutex
 
@@ -169,9 +169,16 @@ func NewApplication() *Application {
 // different one) by returning it or stop the key event processing by returning
 // nil.
 //
-// Note that this also affects the default event handling of the application
-// itself: Such a handler can intercept the Ctrl-C event which closes the
-// application.
+// The only default global key event is Ctrl-C which stops the application. It
+// requires special handling:
+//
+//   - If you do not wish to change the default behavior, return the original
+//     event object passed to your input capture function.
+//   - If you wish to block Ctrl-C from any functionality, return nil.
+//   - If you do not wish Ctrl-C to stop the application but still want to
+//     forward the Ctrl-C event to primitives down the hierarchy, return a new
+//     key event with the same key and modifiers, e.g.
+//     tcell.NewEventKey(tcell.KeyCtrlC, 0, tcell.ModNone).
 func (a *Application) SetInputCapture(capture func(event *tcell.EventKey) *tcell.EventKey) *Application {
 	a.inputCapture = capture
 	return a
@@ -215,6 +222,7 @@ func (a *Application) SetScreen(screen tcell.Screen) *Application {
 		// Run() has not been called yet.
 		a.screen = screen
 		a.Unlock()
+		screen.Init()
 		return a
 	}
 
@@ -368,6 +376,7 @@ EventLoop:
 
 				// Intercept keys.
 				var draw bool
+				originalEvent := event
 				if inputCapture != nil {
 					event = inputCapture(event)
 					if event == nil {
@@ -378,7 +387,7 @@ EventLoop:
 				}
 
 				// Ctrl-C closes the application.
-				if event.Key() == tcell.KeyCtrlC {
+				if event == originalEvent && event.Key() == tcell.KeyCtrlC {
 					a.Stop()
 					break
 				}
@@ -525,8 +534,8 @@ func (a *Application) fireMouseActions(event *tcell.EventMouse) (consumed, isMou
 			if buttons&buttonEvent.button != 0 {
 				fire(buttonEvent.down)
 			} else {
-				fire(buttonEvent.up)
-				if !clickMoved {
+				fire(buttonEvent.up) // A user override might set event to nil.
+				if !clickMoved && event != nil {
 					if a.lastMouseClick.Add(DoubleClickInterval).Before(time.Now()) {
 						fire(buttonEvent.click)
 						a.lastMouseClick = time.Now()
